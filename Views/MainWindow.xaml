@@ -35,7 +35,7 @@
             <Label Content="Gender:"/>
             <ComboBox ItemsSource="{Binding GenderOptions}"
                       SelectedItem="{Binding SelectedGenderOption}"
-                      DisplayMemberPath="DisplayTextValue"
+                      DisplayMemberPath="Name"
                       Margin="0,0,0,10"/>
 
             <Label Content="Favourite Activity:"/>
@@ -47,7 +47,7 @@
                 <ComboBox Grid.Column="0"
                           ItemsSource="{Binding ActivityOptions}"
                           SelectedItem="{Binding SelectedActivityOption}"
-                          DisplayMemberPath="DisplayTextValue"
+                          DisplayMemberPath="Name"
                           Margin="0,0,5,0"/>
                 <Button Grid.Column="1"
                         Content="+"
@@ -65,7 +65,7 @@
                 <ComboBox Grid.Column="0"
                           ItemsSource="{Binding TechnologyOptions}"
                           SelectedItem="{Binding SelectedTechnologyOption}"
-                          DisplayMemberPath="DisplayTextValue"
+                          DisplayMemberPath="Name"
                           Margin="0,0,5,0"/>
                 <Button Grid.Column="1"
                         Content="+"

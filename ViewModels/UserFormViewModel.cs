@@ -12,95 +12,58 @@ namespace WpfApp.ViewModels;
 
 public class UserFormViewModel : BaseViewModel
 {
-    private static readonly IList<SystemOption<Gender>> SystemDefinedGenderOptions = Enum.GetValues<Gender>().Select(
-        x => new SystemOption<Gender>
-        {
-            Id = (int)x,
-            SystemId = x,
-            DisplayTextValue = x.ToString()
-        }).ToList().AsReadOnly();
-
-    private static readonly IList<SystemOption<ProgrammingLanguage>> SystemDefinedProgrammingLanguageOptions = Enum
-        .GetValues<ProgrammingLanguage>().Select(x => new SystemOption<ProgrammingLanguage>
-        {
-            Id = (int)x,
-            SystemId = x,
-            DisplayTextValue = x.ToString()
-        }).ToList().AsReadOnly();
-
     private readonly ApplicationDbContext _dbContext;
     private User _currentUser = new();
 
-    private IEnumerable<BaseOption> _genderOptions = [];
-    private BaseOption? _selectedGenderOption;
+    private readonly SystemOptionList<Gender> _genderOptionList = SystemOptionList<Gender>.ForGender();
 
-    private IEnumerable<BaseOption> _activityOptions = [];
-    private BaseOption? _selectedActivityOption;
+    private readonly DynamicOptionList _activityOptionList = new();
 
-    private IEnumerable<BaseOption> _technologyOptions = [];
-    private BaseOption? _selectedTechnologyOption;
+    private readonly MixedOptionList<ProgrammingLanguage> _technologyOptionList =
+        MixedOptionList<ProgrammingLanguage>.ForProgrammingLanguages();
 
     public User CurrentUser
     {
         get => _currentUser;
-        set => SetProperty(ref _currentUser, value);
+        private set => SetProperty(ref _currentUser, value);
     }
 
-    public IEnumerable<BaseOption> GenderOptions
-    {
-        get => _genderOptions;
-        private set => SetProperty(ref _genderOptions, value);
-    }
+    public IEnumerable<BaseOption> GenderOptions => _genderOptionList.Options;
 
-    public BaseOption? SelectedGenderOption
+    public SystemOption<Gender>? SelectedGenderOption
     {
-        get => _selectedGenderOption;
+        get => _genderOptionList.SelectedOption;
         set
         {
-            if (SetProperty(ref _selectedGenderOption, value))
-            {
-                CommandManager.InvalidateRequerySuggested();
-            }
+            _genderOptionList.SelectedOption = value;
+            OnPropertyChanged();
         }
     }
 
-    public IEnumerable<BaseOption> ActivityOptions
-    {
-        get => _activityOptions;
-        private set => SetProperty(ref _activityOptions, value);
-    }
+    public IEnumerable<BaseOption> ActivityOptions => _activityOptionList.Options;
 
-
-    public BaseOption? SelectedActivityOption
+    public DynamicOption? SelectedActivityOption
     {
-        get => _selectedActivityOption;
+        get => _activityOptionList.SelectedOption;
         set
         {
-            if (SetProperty(ref _selectedActivityOption, value))
-            {
-                CommandManager.InvalidateRequerySuggested();
-            }
+            _activityOptionList.SelectedOption = value;
+            OnPropertyChanged();
         }
     }
 
-    public IEnumerable<BaseOption> TechnologyOptions
-    {
-        get => _technologyOptions;
-        private set => SetProperty(ref _technologyOptions, value);
-    }
+    public IEnumerable<BaseOption> TechnologyOptions => _technologyOptionList.Options;
 
     public BaseOption? SelectedTechnologyOption
     {
-        get => _selectedTechnologyOption;
+        get => _technologyOptionList.SelectedOption;
         set
         {
-            if (SetProperty(ref _selectedTechnologyOption, value))
+            _technologyOptionList.SelectedOption = value;
+            OnPropertyChanged();
+            if (_technologyOptionList.IsSelected(ProgrammingLanguage.Java))
             {
-                CommandManager.InvalidateRequerySuggested();
-                if (value is SystemOption<ProgrammingLanguage> { SystemId: ProgrammingLanguage.Java })
-                {
-                    MessageBox.Show($"Java!?", "Are you sure?", MessageBoxButton.OK, MessageBoxImage.Warning);
-                }
+                MessageBox.Show($"Java!?", "Are you sure?", MessageBoxButton.OK, MessageBoxImage.Warning);
             }
         }
     }
@@ -119,48 +82,61 @@ public class UserFormViewModel : BaseViewModel
         SelectRandomUserCommand = new RelayCommand(ExecuteSelectRandomUser);
 
         LoadData();
-        InitializeSelections();
+        UpdateListSelections();
     }
 
     private void LoadData()
     {
-        GenderOptions = SystemDefinedGenderOptions;
         LoadActivityOptions();
         LoadTechnologyOptions();
     }
 
     private void LoadActivityOptions()
     {
-        ActivityOptions = _dbContext.Activities.AsNoTracking().Select(x => new DynamicOption()
+        var activityOptions = _dbContext.Activities.AsNoTracking().Select(x => new DynamicOption()
         {
             Id = x.Id,
-            DisplayTextValue = x.Name,
+            Name = x.Name,
         }).ToList();
+        _activityOptionList.SetOptions(activityOptions);
+        OnPropertyChanged(nameof(ActivityOptions));
+        OnPropertyChanged(nameof(SelectedActivityOption));
     }
 
     private void LoadTechnologyOptions()
     {
-        TechnologyOptions = SystemDefinedProgrammingLanguageOptions.Concat<BaseOption>(_dbContext.Technologies
-            .AsNoTracking().Select(x => new DynamicOption()
-            {
-                Id = x.Id,
-                DisplayTextValue = x.Name,
-            })).ToList();
+        var technologyOptions = _dbContext.Technologies.AsNoTracking().Select(x => new DynamicOption()
+        {
+            Id = x.Id,
+            Name = x.Name,
+        }).ToList();
+        _technologyOptionList.SetOptions(technologyOptions);
+        OnPropertyChanged(nameof(TechnologyOptions));
+        OnPropertyChanged(nameof(SelectedTechnologyOption));
     }
 
-    private void InitializeSelections()
+    private void UpdateListSelections()
     {
-        SelectedGenderOption = GenderOptions.FirstOrDefault(opt =>
-            opt is SystemOption<Gender> sysOpt && sysOpt.SystemId == CurrentUser.Gender);
-        SelectedActivityOption = ActivityOptions.FirstOrDefault(opt => opt.Id == CurrentUser.FavouriteActivityId);
-        SelectedTechnologyOption = TechnologyOptions.FirstOrDefault(opt =>
+        _genderOptionList.SelectOption(CurrentUser.Gender);
+        OnPropertyChanged(nameof(SelectedGenderOption));
+
+        _activityOptionList.SelectOption(CurrentUser.FavouriteActivityId);
+        OnPropertyChanged(nameof(SelectedActivityOption));
+
+        if (CurrentUser.FavouriteProgrammingLanguage is not null)
         {
-            if (opt is SystemOption<ProgrammingLanguage> sysOpt)
-            {
-                return sysOpt.SystemId == CurrentUser.FavouriteProgrammingLanguage;
-            }
-            return opt.Id == CurrentUser.FavouriteTechnologyId;
-        });
+            _technologyOptionList.SelectOption(CurrentUser.FavouriteProgrammingLanguage);
+        }
+        else if (CurrentUser.FavouriteTechnology is not null)
+        {
+            _technologyOptionList.SelectOption(CurrentUser.FavouriteTechnology.Id);
+        }
+        else
+        {
+            _technologyOptionList.ClearSelection();
+        }
+
+        OnPropertyChanged(nameof(SelectedTechnologyOption));
     }
 
     private void ExecuteAddNewActivity()
@@ -182,7 +158,8 @@ public class UserFormViewModel : BaseViewModel
         {
             _dbContext.SaveChanges();
             LoadActivityOptions();
-            SelectedActivityOption = ActivityOptions.FirstOrDefault(opt => opt.DisplayTextValue == newItemName);
+            _activityOptionList.SelectOption(newActivity.Id);
+            OnPropertyChanged(nameof(SelectedActivityOption));
         }
         catch (DbUpdateException ex)
         {
@@ -220,14 +197,17 @@ public class UserFormViewModel : BaseViewModel
         var newItemName = dialog.ItemName.ToLower();
         if (string.IsNullOrWhiteSpace(newItemName)) return;
 
-        var isSystemDefined = SystemDefinedProgrammingLanguageOptions
-            .Any(opt => string.Equals(opt.DisplayTextValue, newItemName, StringComparison.OrdinalIgnoreCase));
-
-        if (isSystemDefined)
+        if (_technologyOptionList.ContainsSystemOptionWithName(newItemName))
         {
             MessageBox.Show($"'{newItemName}' is a system-defined programming language and cannot be added again.",
                 "System Language", MessageBoxButton.OK, MessageBoxImage.Information);
             return;
+        }
+
+        if (_technologyOptionList.ContainsDynamicOptionWithName(newItemName))
+        {
+            MessageBox.Show($"A technology named '{newItemName}' already exists.", "Duplicate Technology",
+                MessageBoxButton.OK, MessageBoxImage.Warning);
         }
 
         var newTechnology = new Technology { Name = newItemName };
@@ -237,8 +217,8 @@ public class UserFormViewModel : BaseViewModel
         {
             _dbContext.SaveChanges();
             LoadTechnologyOptions();
-            SelectedTechnologyOption = TechnologyOptions.FirstOrDefault(opt =>
-                opt is DynamicOption dynOpt && dynOpt.DisplayTextValue == newItemName);
+            _technologyOptionList.SelectOption(newTechnology.Id);
+            OnPropertyChanged(nameof(SelectedTechnologyOption));
         }
         catch (DbUpdateException ex)
         {
@@ -246,7 +226,8 @@ public class UserFormViewModel : BaseViewModel
             if (ex.InnerException != null &&
                 ex.InnerException.Message.Contains("UNIQUE constraint failed", StringComparison.OrdinalIgnoreCase))
             {
-                MessageBox.Show($"A technology named '{newItemName}' already exists.", "Duplicate Technology",
+                MessageBox.Show($"Can not save. A technology named '{newItemName}' already exists.",
+                    "Duplicate Technology",
                     MessageBoxButton.OK, MessageBoxImage.Warning);
             }
             else
@@ -264,26 +245,19 @@ public class UserFormViewModel : BaseViewModel
         }
     }
 
-    private bool CanExecuteSave()
-    {
-        return SelectedGenderOption != null &&
-               SelectedActivityOption != null &&
-               SelectedTechnologyOption != null;
-    }
+    private bool CanExecuteSave() =>
+        SelectedGenderOption is not null &&
+        SelectedActivityOption is not null &&
+        SelectedTechnologyOption is not null;
 
     private void ExecuteSave()
     {
         if (!CanExecuteSave()) return;
 
-        if (SelectedGenderOption is SystemOption<Gender> genderOpt)
-        {
-            CurrentUser.Gender = genderOpt.SystemId;
-        }
+        CurrentUser.Gender = SelectedGenderOption!.SystemId;
 
-        if (SelectedActivityOption != null)
-        {
-            CurrentUser.FavouriteActivityId = SelectedActivityOption.Id;
-        }
+        CurrentUser.FavouriteActivity = null;
+        CurrentUser.FavouriteActivityId = SelectedActivityOption!.Id;
 
         if (SelectedTechnologyOption != null)
         {
@@ -298,6 +272,7 @@ public class UserFormViewModel : BaseViewModel
                 }
                 case DynamicOption techDynOpt:
                     CurrentUser.FavouriteProgrammingLanguage = null;
+                    CurrentUser.FavouriteTechnology = null;
                     CurrentUser.FavouriteTechnologyId = techDynOpt.Id;
                     break;
             }
@@ -316,11 +291,11 @@ public class UserFormViewModel : BaseViewModel
 
             _dbContext.SaveChanges();
             _dbContext.ChangeTracker.Clear();
-            
+
             CurrentUser = new User();
-            InitializeSelections();
+            UpdateListSelections();
             CommandManager.InvalidateRequerySuggested();
-            
+
             MessageBox.Show("User data saved successfully!", "Success", MessageBoxButton.OK,
                 MessageBoxImage.Information);
         }
@@ -353,12 +328,15 @@ public class UserFormViewModel : BaseViewModel
             var random = new Random();
             var randomId = userIds[random.Next(userIds.Count)];
 
-            var randomUser = _dbContext.Users.AsNoTracking().FirstOrDefault(u => u.Id == randomId);
+            var randomUser = _dbContext.Users.AsNoTracking()
+                .Include(u => u.FavouriteActivity)
+                .Include(u => u.FavouriteTechnology)
+                .FirstOrDefault(u => u.Id == randomId);
 
-            if (randomUser != null)
+            if (randomUser is not null)
             {
                 CurrentUser = randomUser;
-                InitializeSelections();
+                UpdateListSelections();
                 CommandManager.InvalidateRequerySuggested();
             }
             else
